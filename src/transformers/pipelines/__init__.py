@@ -913,8 +913,42 @@ def pipeline(
     # vision tasks when calling `pipeline()` with `model` and only one of the `image_processor` and `feature_extractor`.
     # TODO: we need to make `NO_IMAGE_PROCESSOR_TASKS` and `NO_FEATURE_EXTRACTOR_TASKS` more robust to avoid such issue.
     # This block is only temporarily to make CI green.
-    if load_image_processor and load_feature_extractor:
-        load_feature_extractor = False
+    if isinstance(model, PreTrainedModel):
+        if load_image_processor and load_feature_extractor:
+            if image_processor is None and feature_extractor is None:
+                # If both are None, try to load image_processor first
+                try:
+                    image_processor = AutoImageProcessor.from_pretrained(
+                        model.config._name_or_path, _from_pipeline=task, **hub_kwargs, **model_kwargs
+                    )
+                    load_feature_extractor = False
+                except Exception:
+                    # If image_processor fails, try feature_extractor
+                    feature_extractor = AutoFeatureExtractor.from_pretrained(
+                        model.config._name_or_path, _from_pipeline=task, **hub_kwargs, **model_kwargs
+                    )
+                    load_image_processor = False
+            elif image_processor is not None:
+                load_feature_extractor = False
+            elif feature_extractor is not None:
+                load_image_processor = False
+        elif load_image_processor and image_processor is None:
+            try:
+                image_processor = AutoImageProcessor.from_pretrained(
+                    model.config._name_or_path, _from_pipeline=task, **hub_kwargs, **model_kwargs
+                )
+            except Exception:
+                load_image_processor = False
+        elif load_feature_extractor and feature_extractor is None:
+            try:
+                feature_extractor = AutoFeatureExtractor.from_pretrained(
+                    model.config._name_or_path, _from_pipeline=task, **hub_kwargs, **model_kwargs
+                )
+            except Exception:
+                load_feature_extractor = False
+    else:
+        if load_image_processor and load_feature_extractor:
+            load_feature_extractor = False
 
     if (
         tokenizer is None
